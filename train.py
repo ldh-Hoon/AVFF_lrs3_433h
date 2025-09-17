@@ -98,7 +98,7 @@ def train_ddp(rank, world_size):
                         model.module.forward_with_mask(video, audio)
                     # Generator + Discriminator loss 한 번에 계산
                     loss_g, loss_d, (loss_c, loss_rec, loss_adv) = model.module.forward_loss(
-                        L_c, v_encoded, a_encoded, v_rec, a_rec, i_v, i_a
+                        L_c, video, audio, v_encoded, a_encoded, v_rec, a_rec, i_v, i_a
                     )
 
             # -------------------- Backward --------------------
