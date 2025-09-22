@@ -12,7 +12,7 @@ from torch.multiprocessing import spawn
 from torch.cuda.amp import GradScaler, autocast  # FP16
 
 # ---------- 설정 ----------
-BATCH = 8
+BATCH = 1
 NUM_EPOCH = 5
 LR = 1.5e-4
 warmup_epochs = int(NUM_EPOCH * 0.1)
@@ -20,7 +20,7 @@ logging_step = 200
 save_every = 1
 model_name = "lrs3_5epoch"
 root_path = "/lrs3/433h_data"
-accum_steps = 1  # Gradient Accumulation
+accum_steps = 2  # Gradient Accumulation
 
 os.makedirs("logs", exist_ok=True)
 os.makedirs("trained", exist_ok=True)
@@ -94,13 +94,15 @@ def train_ddp(rank, world_size):
             # -------------------- Forward + Loss --------------------
             with autocast():  # FP16
                 with model.no_sync() if ((step + 1) % accum_steps != 0) else torch.enable_grad():
-                    v_rec, a_rec, _, _, i_v, i_a, (L_G, L_D, L_c, v_encoded, a_encoded) = \
-                        model.module.forward_with_mask(video, audio)
-                    # Generator + Discriminator loss 한 번에 계산
-                    loss_g, loss_d, (loss_c, loss_rec, loss_adv) = model.module.forward_loss(
-                        L_c, video, audio, v_encoded, a_encoded, v_rec, a_rec, i_v, i_a
-                    )
+                    if epoch < 1:  # 초반 1 epoch
+                        v_rec, a_rec, _, _, i_v, i_a, (loss_g, loss_d, loss_c, loss_rec, loss_adv, v_encoded, a_encoded) = model.module.forward_with_nomask(video, audio)
 
+
+                    else:
+                        v_rec, a_rec, _, _, i_v, i_a, (loss_g, loss_d, loss_c, loss_rec, loss_adv, v_encoded, a_encoded) = \
+                            model.module.forward_with_mask(video, audio)
+
+            
             # -------------------- Backward --------------------
             scaler.scale((loss_g + loss_d) / accum_steps).backward()
 
@@ -166,5 +168,5 @@ if __name__ == '__main__':
     except RuntimeError:
         pass
 
-    world_size = 2
+    world_size = 4
     spawn(train_ddp, args=(world_size,), nprocs=world_size, join=True)
