@@ -1,117 +1,104 @@
-# vis_lrs3_save.py
+import matplotlib.pyplot as plt
+import os
 import torch
-import matplotlib.pyplot as plt
 import numpy as np
-import os
-
-def display_mel_spectrogram(mel_tensor, save_path, title="Mel Spectrogram", figsize=(12,4)):
-    """
-    mel_tensor: (time, n_mels) 또는 (n_mels, time)
-    save_path: 저장할 파일 경로
-    """
-    if torch.is_tensor(mel_tensor):
-        mel = mel_tensor.detach().cpu().numpy()
-    else:
-        mel = mel_tensor
-
-    # (time, n_mels) -> (n_mels, time)
-    if mel.shape[0] != 128:  # n_mels이 128이 아니라면 transpose
-        mel = mel.T
-
-    plt.figure(figsize=figsize)
-    plt.imshow(mel, origin='lower', aspect='auto', interpolation='nearest', cmap='magma')
-    plt.colorbar(format='%+2.0f dB')
-    plt.title(title)
-    plt.xlabel("Frames")
-    plt.ylabel("Mel Bins")
-    plt.tight_layout()
-    plt.savefig(save_path)
-    plt.close()
-
-def display_video_frames(video_tensor, save_path, title="Video Frames", max_frames=16):
-    """
-    video_tensor: (B, T, C, H, W)
-    save_path: 저장할 파일 경로
-    """
-    video = video_tensor[0]  # 배치 0번째
-    T, C, H, W = video.shape
-    n_frames = min(T, max_frames)
-    
-    fig, axes = plt.subplots(1, n_frames, figsize=(2*n_frames, 2))
-    for i in range(n_frames):
-        frame = video[i]  # (C,H,W)
-        frame = frame.permute(1,2,0).detach().cpu().numpy()  # (H,W,C)
-        frame = (frame - frame.min()) / (frame.max() - frame.min() + 1e-6)
-        #if C == 3:
-            #frame = frame[..., ::-1]  # BGR -> RGB
-        axes[i].imshow(frame)
-        axes[i].axis('off')
-        axes[i].set_title(f"Frame {i+1}")
-    plt.suptitle(title)
-    plt.tight_layout()
-    plt.savefig(save_path)
-    plt.close()
-
-def visualize_batch(video, audio, save_dir='vis/', v_rec=None, a_rec=None):
-    """
-    video: (B,T,C,H,W)
-    audio: (B, T_mel, n_mels)
-    save_dir: 시각화 파일 저장 디렉토리
-    v_rec, a_rec: optional reconstruction tensors
-    """
-    os.makedirs(save_dir, exist_ok=True)
-
-    display_mel_spectrogram(audio[0], save_path=os.path.join(save_dir, "original_audio_mel.png"), title="Original Audio Mel")
-    display_video_frames(video, save_path=os.path.join(save_dir, "original_video_frames.png"), title="Original Video Frames")
-
-    if a_rec is not None:
-        display_mel_spectrogram(a_rec[0], save_path=os.path.join(save_dir, "reconstructed_audio_mel.png"), title="Reconstructed Audio Mel")
-    if v_rec is not None:
-        display_video_frames(v_rec, save_path=os.path.join(save_dir, "reconstructed_video_frames.png"), title="Reconstructed Video Frames")
 
 
-import matplotlib.pyplot as plt
-import os
+def save_reconstruction(video, audio, v_rec, a_rec, save_dir, step_or_epoch, log_db=False, max_frames=16):
+   """
+   영상 + 오디오 복원 결과 저장 함수
+   - 오디오는 원본/복원을 한 그림에 위아래로 비교
+   - 비디오는 프레임별 원본/복원을 2행 N열로 한 장에 저장
+   """
 
 
-# -----------------------------
-# Reconstruction 저장 함수
-# -----------------------------
-def save_reconstruction(video, audio, v_rec, a_rec, save_dir, step_or_epoch):
    os.makedirs(save_dir, exist_ok=True)
-  
-   # --- 오디오 스펙트로그램 ---
-   mel_audio = audio[0].detach().cpu().numpy().T  # (T, F) -> (F, T) ?
-   mel_rec = a_rec[0].detach().cpu().numpy().T
-  
-   plt.figure(figsize=(10,4))
-   plt.imshow(mel_audio, aspect='auto', origin='lower')
-   plt.colorbar()
-   plt.title(f'Original Audio - Step/Epoch {step_or_epoch}')
-   plt.savefig(os.path.join(save_dir, f'audio_original_{step_or_epoch}.png'))
-   plt.close()
 
 
-   plt.figure(figsize=(10,4))
-   plt.imshow(mel_rec, aspect='auto', origin='lower')
-   plt.colorbar()
-   plt.title(f'Reconstructed Audio - Step/Epoch {step_or_epoch}')
-   plt.savefig(os.path.join(save_dir, f'audio_rec_{step_or_epoch}.png'))
-   plt.close()
-  
-   # --- 비디오 프레임 이미지 ---
+   # --- 오디오 Mel ---
+   mel_orig = audio[0].detach()
+   mel_rec = a_rec[0].detach()
+
+
+   if mel_orig.ndim == 3:
+       mel_orig = mel_orig.squeeze(0)
+   if mel_rec.ndim == 3:
+       mel_rec = mel_rec.squeeze(0)
+
+
+   mel_orig = mel_orig.T
+   mel_rec = mel_rec.T
+
+
+   if log_db:
+       mel_orig = 20 * torch.log10(mel_orig + 1e-5)
+       mel_rec = 20 * torch.log10(mel_rec + 1e-5)
+
+
+   mel_orig_np = mel_orig.cpu().numpy()
+   mel_rec_np = mel_rec.cpu().numpy()
+
+
+   vmin = min(mel_orig_np.min(), mel_rec_np.min())
+   vmax = max(mel_orig_np.max(), mel_rec_np.max())
+
+
+   fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
+   im0 = axes[0].imshow(mel_orig_np, aspect='auto', origin='lower', cmap='magma', vmin=vmin, vmax=vmax)
+   axes[0].set_title(f'Original Audio - {step_or_epoch}')
+   fig.colorbar(im0, ax=axes[0])
+
+
+   im1 = axes[1].imshow(mel_rec_np, aspect='auto', origin='lower', cmap='magma', vmin=vmin, vmax=vmax)
+   axes[1].set_title(f'Reconstructed Audio - {step_or_epoch}')
+   fig.colorbar(im1, ax=axes[1])
+
+
+   axes[1].set_xlabel("Time Frame")
+   axes[1].set_ylabel("Mel Bin")
+   plt.tight_layout()
+   mel_path = os.path.join(save_dir, f'audio_comparison_{step_or_epoch}.png')
+   plt.savefig(mel_path)
+   plt.close(fig)
+   print(f"[Saved] {mel_path}")
+
+
+   # --- 비디오 (프레임 16개 비교) ---
    num_frames = video.size(2)
-   frame_dir = os.path.join(save_dir, f'video_frames_{step_or_epoch}')
-   os.makedirs(frame_dir, exist_ok=True)
-  
-   for i in range(num_frames):
-       frame_orig = video[0, :, i, :, :].permute(1,2,0).detach().cpu().numpy()
+   n_select = min(max_frames, num_frames)
+
+
+   frame_indices = np.linspace(0, num_frames-1, n_select, dtype=int)
+
+
+   fig, axes = plt.subplots(2, n_select, figsize=(n_select*2, 4))
+
+
+   for i, frame_index in enumerate(frame_indices):
+       # 원본
+       frame_orig = video[0, :, frame_index, :, :].permute(1, 2, 0).detach().cpu().numpy()
        frame_orig = (frame_orig - frame_orig.min()) / (frame_orig.max() - frame_orig.min() + 1e-6)
-       plt.imsave(os.path.join(frame_dir, f'orig_{i:03d}.png'), frame_orig)
-      
-       frame_rec = v_rec[0, :, i, :, :].permute(1,2,0).detach().cpu().numpy()
+       axes[0, i].imshow(frame_orig)
+       axes[0, i].axis('off')
+       axes[0, i].set_title(f'F{frame_index}')
+
+
+       # 복원
+       frame_rec = v_rec[0, :, frame_index, :, :].permute(1, 2, 0).detach().cpu().numpy()
        frame_rec = (frame_rec - frame_rec.min()) / (frame_rec.max() - frame_rec.min() + 1e-6)
-       plt.imsave(os.path.join(frame_dir, f'rec_{i:03d}.png'), frame_rec)
+       axes[1, i].imshow(frame_rec)
+       axes[1, i].axis('off')
+
+
+   axes[0,0].set_ylabel("Original")
+   axes[1,0].set_ylabel("Reconstructed")
+
+
+   plt.tight_layout()
+   video_path = os.path.join(save_dir, f'video_comparison_{step_or_epoch}.png')
+   plt.savefig(video_path)
+   plt.close(fig)
+   print(f"[Saved] {video_path}")
 
 
 
