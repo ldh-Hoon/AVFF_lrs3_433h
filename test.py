@@ -8,7 +8,7 @@ from AVFF.model.AVFF import AVFF
 BATCH = 2
 root_path = "/lrs3/433h_data"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-model_path = "trained/final_ema_433h_epoch17.pth"  # 불러올 모델
+model_path = "trained/final_ema_433h_lip_6.pth"  # 불러올 모델
 
 os.makedirs("reconstructions", exist_ok=True)
 
