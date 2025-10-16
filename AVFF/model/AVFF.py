@@ -27,7 +27,7 @@ def create_mask(slice_size):
    mask = torch.zeros(slice_size)
    mask[:slice_size // 2] = 1
    mask = mask[torch.randperm(slice_size)]
-   return mask.view(slice_size, 1)
+   return mask.reshape(slice_size, 1)
 
 
 class S2SNetwork(nn.Module):
@@ -46,10 +46,10 @@ class S2SNetwork(nn.Module):
        x = x.permute(0, 1, 2, 3)
 
 
-       x = x.view(B*S, self.out_len, -1)
+       x = x.reshape(B*S, self.out_len, -1)
        x = x.permute(1, 0, 2)
        x = self.transformer_block(x)
-       x = x.view(self.out_len, B, S, -1)
+       x = x.reshape(self.out_len, B, S, -1)
        return x.permute(1, 2, 0, 3)
 
 
@@ -59,8 +59,8 @@ class AVFF(nn.Module):
                v_emb_dim=768,
                v_num_patches=196,
                a_num_patches=48,
-               marlin_path = "./pretrained_models/MARLIN/marlin_vit_base_ytf.full.pt",
-                audioMAE_path = './pretrained_models/AudioMAE/pretrained.pth'):
+               marlin_path = "/home/ldh/avsr/AvHubert/av_hubert/avhubert/AVFF/pretrained_models/MARLIN/marlin_vit_base_ytf.full.pt",
+               audioMAE_path = '/home/ldh/avsr/AvHubert/av_hubert/avhubert/AVFF/pretrained_models/AudioMAE/pretrained.pth'):
        super(AVFF, self).__init__()
       
        self.marlin_path = marlin_path
@@ -113,7 +113,7 @@ class AVFF(nn.Module):
        # video embedding
        v = self.marlin.extract_features(v)
        b, _, _ = v.shape
-       v = v.view(b, self.num_slices, -1, v.shape[-1])
+       v = v.reshape(b, self.num_slices, -1, v.shape[-1])
 
 
        # audio embedding
@@ -122,7 +122,7 @@ class AVFF(nn.Module):
        a = self.audio_mae.forward_encoder_no_mask(a)
        a = a[:, 1:, :]
        a = a[:, :384, :]
-       a = a.view(b, self.num_slices, -1, a.shape[-1])
+       a = a.reshape(b, self.num_slices, -1, a.shape[-1])
 
 
        return v, a
@@ -132,7 +132,7 @@ class AVFF(nn.Module):
        B, C, T, H, W = x.shape
        pt, ph, pw = patch_size
        assert T % pt == 0 and H % ph == 0 and W % pw == 0
-       x = x.view(B, C, T//pt, pt, H//ph, ph, W//pw, pw)
+       x = x.reshape(B, C, T//pt, pt, H//ph, ph, W//pw, pw)
        x = x.permute(0, 2, 4, 6, 1, 3, 5, 7)  # [B, T//pt, H//ph, W//pw, C, pt, ph, pw]
        x = x.reshape(B, -1, C*pt*ph*pw)
        return x
@@ -144,22 +144,22 @@ class AVFF(nn.Module):
        m_a = 1 - m_v
 
 
-       mask_v = m_v.view(1, slice_size, 1, 1).to(self.device)
-       mask_a = m_a.view(1, slice_size, 1, 1).to(self.device)
+       mask_v = m_v.reshape(1, slice_size, 1, 1).to(self.device)
+       mask_a = m_a.reshape(1, slice_size, 1, 1).to(self.device)
 
 
        v_vis = v * mask_v
        a_vis = a * mask_a
 
 
-       v_vis = v_vis[v_vis != 0].view(v_vis.shape[0], -1, v_vis.shape[2], v_vis.shape[3])
-       a_vis = a_vis[a_vis != 0].view(a_vis.shape[0], -1, a_vis.shape[2], a_vis.shape[3])
+       v_vis = v_vis[v_vis != 0].reshape(v_vis.shape[0], -1, v_vis.shape[2], v_vis.shape[3])
+       a_vis = a_vis[a_vis != 0].reshape(a_vis.shape[0], -1, a_vis.shape[2], a_vis.shape[3])
       
        a_v = self.A2V(a_vis)
        v_a = self.V2A(v_vis)
       
-       i_v = (m_v.squeeze() == 0).nonzero(as_tuple=True)[0].view(-1)
-       i_a = (m_a.squeeze() == 0).nonzero(as_tuple=True)[0].view(-1)
+       i_v = (m_v.squeeze() == 0).nonzero(as_tuple=True)[0].reshape(-1)
+       i_a = (m_a.squeeze() == 0).nonzero(as_tuple=True)[0].reshape(-1)
 
 
        v_fused = v.clone()
@@ -228,8 +228,8 @@ class AVFF(nn.Module):
 
        # ---------------- Contrastive Loss ----------------
        # v_encoded, a_encoded는 이미 encoding된 텐서
-       v_encoded = v_encoded.view(B, self.num_slices, -1, 768)
-       a_encoded = a_encoded.view(B, self.num_slices, -1, 768)
+       v_encoded = v_encoded.reshape(B, self.num_slices, -1, 768)
+       a_encoded = a_encoded.reshape(B, self.num_slices, -1, 768)
 
 
        masked_v_encoded = v_encoded[:, i_v, :, :]  # (B, num_mask_slices, N_patch, D)
@@ -246,8 +246,8 @@ class AVFF(nn.Module):
 
 
        # v, v_rec를 patchify
-       v_patches = self.patchify_img(v).view(B, self.num_slices, -1, 1536)        # [B, N_patch, 768]
-       v_rec_patches = self.patchify_img(v_rec).view(B, self.num_slices, -1, 1536)
+       v_patches = self.patchify_img(v).reshape(B, self.num_slices, -1, 1536)        # [B, N_patch, 768]
+       v_rec_patches = self.patchify_img(v_rec).reshape(B, self.num_slices, -1, 1536)
 
 
        # masking index i_v 사용
@@ -263,8 +263,8 @@ class AVFF(nn.Module):
        a_patches = self.audio_mae.patchify(a_padded)[:, :384, :]  # (B, 384, 256)
        a_rec_patches = self.audio_mae.patchify(a_rec_padded)[:, :384, :]  # (B, 384, 256)
       
-       a_patches = a_patches.view(B, self.num_slices, -1, 256)
-       a_rec_patches = a_rec_patches.view(B, self.num_slices, -1, 256)
+       a_patches = a_patches.reshape(B, self.num_slices, -1, 256)
+       a_rec_patches = a_rec_patches.reshape(B, self.num_slices, -1, 256)
       
        masked_a = a_patches[:, i_a]
        masked_a_rec = a_rec_patches[:, i_a]
@@ -363,7 +363,7 @@ class AVFF(nn.Module):
                inputs=interpolates_v,
                grad_outputs=torch.ones_like(D_interpolates_v),
                create_graph=True, retain_graph=True
-           )[0].view(b, -1)
+           )[0].reshape(b, -1)
 
 
            gradients_a = torch.autograd.grad(
@@ -371,7 +371,7 @@ class AVFF(nn.Module):
                inputs=interpolates_a,
                grad_outputs=torch.ones_like(D_interpolates_a),
                create_graph=True, retain_graph=True
-           )[0].view(b, -1)
+           )[0].reshape(b, -1)
 
 
            gp_total += ((gradients_v.norm(2, dim=1)-1)**2).mean() + ((gradients_a.norm(2, dim=1)-1)**2).mean()
@@ -384,8 +384,8 @@ class AVFF(nn.Module):
        B, num_slices, N_v, _ = v.shape
       
        # Patch 평균 (논문에서 bar 의미)
-       v_mean = v.mean(dim=2).view(B * num_slices, -1)  # (B*num_slices, D)
-       a_mean = a.mean(dim=2).view(B * num_slices, -1)  # (B*num_slices, D)
+       v_mean = v.mean(dim=2).reshape(B * num_slices, -1)  # (B*num_slices, D)
+       a_mean = a.mean(dim=2).reshape(B * num_slices, -1)  # (B*num_slices, D)
 
 
        # 정규화 (cosine 유사도와 동일하게)
