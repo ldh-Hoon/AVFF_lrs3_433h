@@ -59,8 +59,8 @@ class AVFF(nn.Module):
                v_emb_dim=768,
                v_num_patches=196,
                a_num_patches=48,
-               marlin_path = "/home/ldh/avsr/AvHubert/av_hubert/avhubert/AVFF/pretrained_models/MARLIN/marlin_vit_base_ytf.full.pt",
-               audioMAE_path = '/home/ldh/avsr/AvHubert/av_hubert/avhubert/AVFF/pretrained_models/AudioMAE/pretrained.pth'):
+               marlin_path = "./pretrained_models/MARLIN/marlin_vit_base_ytf.full.pt",
+               audioMAE_path = './pretrained_models/AudioMAE/pretrained.pth'):
        super(AVFF, self).__init__()
       
        self.marlin_path = marlin_path
